@@ -40,6 +40,9 @@ function formatArea(slug: string | null): string | null {
   return slug.replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+// Lines that are ingredient measurements, not instructions
+const INGREDIENT_LINE_RE = /^([\d¼½¾⅓⅔⅛⅜⅝⅞][\d/\s]*\s*)?(Tb|Tbs|tbsp?|tsp|cups?|lb\.?|oz\.?|qt|pints?|quarts?|pounds?|ounces?|cloves?|heads?|sprigs?|pinch|slices?|inch(es)?|packages?|cans?|bunches?|handfuls?|pieces?|strips?|sheets?|envelopes?)\b/i;
+
 function parseSteps(instructions: string, isJuliaChild: boolean): string[] {
   if (!isJuliaChild) {
     // Original behaviour for TheMealDB recipes (already well-formatted)
@@ -49,31 +52,37 @@ function parseSteps(instructions: string, isJuliaChild: boolean): string[] {
       .filter((s) => s.length > 0 && s !== "STEP" && !/^\d+\.?$/.test(s));
   }
 
-  // Julia Child: PDF text has line-wrapped sentences. Join continuation lines
-  // into paragraphs, then use each paragraph as one step.
-  const lines = instructions.split(/\r?\n/);
+  // Julia Child: PDF text has line-wrapped sentences AND inline ingredient
+  // lines interspersed between steps. Strip ingredient lines first, then
+  // join continuation lines into proper paragraphs.
+  const lines = instructions
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => {
+      if (!l) return true; // keep blank lines (paragraph separators)
+      if (INGREDIENT_LINE_RE.test(l)) return false; // drop ingredient lines
+      if (/^\*/.test(l)) return false; // drop footnote markers
+      if (/^For \d/.test(l)) return false; // drop "For 6 to 8 people" headers
+      return true;
+    });
+
   const paragraphs: string[] = [];
   let current = "";
 
-  for (const raw of lines) {
-    const line = raw.trim();
+  for (const line of lines) {
     if (!line) {
-      // Blank line = paragraph break
       if (current) { paragraphs.push(current); current = ""; }
       continue;
     }
     if (!current) {
       current = line;
     } else {
-      // If previous line ends with sentence-ending punctuation, start new paragraph
       const prevEndsWithPunct = /[.!?:;)]$/.test(current);
-      // If this line starts with a capital or a number, it's likely a new sentence/paragraph
-      const nextStartsNew = /^[A-Z0-9(]/.test(line) && prevEndsWithPunct;
+      const nextStartsNew = /^[A-Z(]/.test(line) && prevEndsWithPunct;
       if (nextStartsNew) {
         paragraphs.push(current);
         current = line;
       } else {
-        // Join as continuation (PDF line wrap)
         current = current + " " + line;
       }
     }
@@ -81,7 +90,7 @@ function parseSteps(instructions: string, isJuliaChild: boolean): string[] {
   if (current) paragraphs.push(current);
 
   return paragraphs.filter(
-    (p) => p.length > 15 && !/^\d+\.?$/.test(p) && p !== "STEP"
+    (p) => p.length > 20 && !/^\d+\.?$/.test(p) && p !== "STEP"
   );
 }
 
