@@ -12,7 +12,10 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  return { title: `${slug} Recipes | Recipe Checker` };
+  const supabase = await createSupabaseServerClient();
+  const { data } = await supabase.from("categories").select("name").eq("slug", slug).single();
+  const name = data?.name ?? slug;
+  return { title: `${name} Recipes | Recipe Checker` };
 }
 
 async function getData(slug: string) {

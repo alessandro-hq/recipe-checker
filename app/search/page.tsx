@@ -43,9 +43,9 @@ export default async function SearchPage({ searchParams }: Props) {
           className="text-3xl sm:text-4xl font-bold mb-2"
           style={{ fontFamily: "var(--font-serif)", color: "var(--fg)" }}
         >
-          {query ? `Results for "${query}"` : "Search Recipes"}
+          {query.length >= 2 ? `Results for "${query}"` : "Search Recipes"}
         </h1>
-        {query && (
+        {query.length >= 2 && (
           <p className="text-sm" style={{ color: "var(--muted)" }}>
             {results.length} recipe{results.length !== 1 ? "s" : ""} found
           </p>

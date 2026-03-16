@@ -24,8 +24,7 @@ async function getCategories(): Promise<Category[]> {
     const { data } = await supabase
       .from("categories")
       .select("slug, name, thumbnail, description")
-      .order("name")
-      .limit(12);
+      .order("name");
     return data ?? [];
   } catch {
     return [];

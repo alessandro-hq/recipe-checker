@@ -6,6 +6,20 @@ import Link from "next/link";
 import MatchScore from "@/components/ui/MatchScore";
 import FavouriteButton from "@/components/ui/FavouriteButton";
 
+function formatCategory(slug: string | null): string | null {
+  if (!slug) return null;
+  if (slug.startsWith("jc-")) {
+    const name = slug.replace("jc-", "").replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    return `${name} (Julia Child)`;
+  }
+  return slug.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function formatArea(slug: string | null): string | null {
+  if (!slug) return null;
+  return slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export default function IngredientMatcher() {
   const [input, setInput] = useState("");
   const [ingredients, setIngredients] = useState<string[]>([]);
@@ -158,7 +172,7 @@ export default function IngredientMatcher() {
                   </Link>
                   {(recipe.category || recipe.area) && (
                     <p className="text-xs uppercase tracking-wider mt-1" style={{ color: "var(--muted)" }}>
-                      {[recipe.category, recipe.area].filter(Boolean).join(" · ")}
+                      {[formatCategory(recipe.category ?? null), formatArea(recipe.area ?? null)].filter(Boolean).join(" · ")}
                     </p>
                   )}
                   <div className="flex flex-wrap gap-1.5 mt-2">

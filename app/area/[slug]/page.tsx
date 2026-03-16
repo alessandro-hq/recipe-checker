@@ -11,15 +11,16 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const name = slug.charAt(0).toUpperCase() + slug.slice(1);
+  const supabase = await createSupabaseServerClient();
+  const { data } = await supabase.from("areas").select("name").eq("slug", slug).single();
+  const name = data?.name ?? (slug.charAt(0).toUpperCase() + slug.slice(1));
   return { title: `${name} Cuisine | Recipe Checker` };
 }
 
 async function getData(slug: string) {
-  const area = slug.charAt(0).toUpperCase() + slug.slice(1);
   const supabase = await createSupabaseServerClient();
   const [recipesRes, catsRes, areasRes] = await Promise.all([
-    supabase.from("recipes").select("id, name, thumbnail, category, area, prep_time_minutes").eq("area", area).order("name"),
+    supabase.from("recipes").select("id, name, thumbnail, category, area, prep_time_minutes").eq("area", slug).order("name"),
     supabase.from("categories").select("slug, name, thumbnail, description").order("name"),
     supabase.from("areas").select("slug, name").order("name"),
   ]);
@@ -33,7 +34,8 @@ async function getData(slug: string) {
 export default async function AreaPage({ params }: Props) {
   const { slug } = await params;
   const { recipes, categories, areas } = await getData(slug);
-  const areaName = slug.charAt(0).toUpperCase() + slug.slice(1);
+  const areaObj = areas.find((a) => a.slug === slug);
+  const areaName = areaObj?.name ?? (slug.charAt(0).toUpperCase() + slug.slice(1));
 
   return (
     <PageWrapper className="py-12">

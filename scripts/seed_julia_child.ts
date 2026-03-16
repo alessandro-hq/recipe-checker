@@ -118,7 +118,10 @@ async function upsertIngredient(name: string): Promise<number | null> {
 }
 
 async function seedRecipe(recipe: RawRecipe): Promise<void> {
-  const categorySlug = CHAPTER_TO_SLUG[recipe.category] ?? "jc-soups";
+  // recipe.category is already the correct slug (e.g. "jc-desserts") from the extractor
+  const categorySlug = recipe.category in CHAPTER_TO_SLUG
+    ? CHAPTER_TO_SLUG[recipe.category]
+    : recipe.category;
 
   // Upsert recipe row
   const { error: recipeErr } = await supabase.from("recipes").upsert(
