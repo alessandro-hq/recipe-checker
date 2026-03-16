@@ -37,6 +37,8 @@ export default async function CategoryPage({ params }: Props) {
 
   const categoryName = categoryObj?.name ?? slug;
 
+  const isJuliaChild = slug.startsWith("jc-");
+
   return (
     <PageWrapper className="py-12">
       <div className="mb-10">
@@ -47,12 +49,14 @@ export default async function CategoryPage({ params }: Props) {
           {categoryName}
         </h1>
         <p className="text-sm" style={{ color: "var(--muted)" }}>
-          {recipes.length} recipes
+          {recipes.length} recipes{isJuliaChild ? " · French cuisine · Julia Child" : ""}
         </p>
       </div>
-      <div className="mb-10">
-        <CategoryBrowser categories={categories} areas={areas} activeCategory={slug} />
-      </div>
+      {!isJuliaChild && (
+        <div className="mb-10">
+          <CategoryBrowser categories={categories} areas={areas} activeCategory={slug} />
+        </div>
+      )}
       <RecipeGrid recipes={recipes} />
     </PageWrapper>
   );
