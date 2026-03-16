@@ -40,13 +40,54 @@ function formatArea(slug: string | null): string | null {
   return slug.replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+function parseSteps(instructions: string, isJuliaChild: boolean): string[] {
+  if (!isJuliaChild) {
+    // Original behaviour for TheMealDB recipes (already well-formatted)
+    return instructions
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0 && s !== "STEP" && !/^\d+\.?$/.test(s));
+  }
+
+  // Julia Child: PDF text has line-wrapped sentences. Join continuation lines
+  // into paragraphs, then use each paragraph as one step.
+  const lines = instructions.split(/\r?\n/);
+  const paragraphs: string[] = [];
+  let current = "";
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) {
+      // Blank line = paragraph break
+      if (current) { paragraphs.push(current); current = ""; }
+      continue;
+    }
+    if (!current) {
+      current = line;
+    } else {
+      // If previous line ends with sentence-ending punctuation, start new paragraph
+      const prevEndsWithPunct = /[.!?:;)]$/.test(current);
+      // If this line starts with a capital or a number, it's likely a new sentence/paragraph
+      const nextStartsNew = /^[A-Z0-9(]/.test(line) && prevEndsWithPunct;
+      if (nextStartsNew) {
+        paragraphs.push(current);
+        current = line;
+      } else {
+        // Join as continuation (PDF line wrap)
+        current = current + " " + line;
+      }
+    }
+  }
+  if (current) paragraphs.push(current);
+
+  return paragraphs.filter(
+    (p) => p.length > 15 && !/^\d+\.?$/.test(p) && p !== "STEP"
+  );
+}
+
 export default function RecipeDetail({ recipe }: { recipe: Recipe }) {
-  const steps = recipe.instructions
-    ? recipe.instructions
-        .split(/\r?\n/)
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0 && s !== "STEP" && !/^\d+\.?$/.test(s))
-    : [];
+  const isJuliaChild = recipe.id?.startsWith("jc-") ?? false;
+  const steps = recipe.instructions ? parseSteps(recipe.instructions, isJuliaChild) : [];
 
   const hasTime = recipe.prep_time_minutes != null && recipe.prep_time_minutes > 0;
 
