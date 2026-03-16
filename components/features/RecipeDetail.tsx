@@ -26,6 +26,20 @@ function TimeLabel({ minutes }: { minutes: number }) {
   );
 }
 
+function formatCategory(slug: string | null): string | null {
+  if (!slug) return null;
+  if (slug.startsWith("jc-")) {
+    const name = slug.replace("jc-", "").replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    return `${name} (Julia Child)`;
+  }
+  return slug.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function formatArea(slug: string | null): string | null {
+  if (!slug) return null;
+  return slug.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export default function RecipeDetail({ recipe }: { recipe: Recipe }) {
   const steps = recipe.instructions
     ? recipe.instructions
@@ -40,14 +54,21 @@ export default function RecipeDetail({ recipe }: { recipe: Recipe }) {
     <article>
       {/* Hero */}
       <div className="relative w-full overflow-hidden" style={{ height: "60vh", minHeight: 320 }}>
-        <Image
-          src={recipe.thumbnail}
-          alt={recipe.name}
-          fill
-          priority
-          sizes="100vw"
-          className="object-cover"
-        />
+        {recipe.thumbnail ? (
+          <Image
+            src={recipe.thumbnail}
+            alt={recipe.name}
+            fill
+            priority
+            sizes="100vw"
+            className="object-cover"
+          />
+        ) : (
+          <div
+            className="absolute inset-0"
+            style={{ background: "linear-gradient(135deg, #2d2417 0%, #5c3d1e 50%, #8b5e3c 100%)" }}
+          />
+        )}
         <div
           className="absolute inset-0"
           style={{ background: "linear-gradient(to top, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0) 60%)" }}
@@ -55,7 +76,7 @@ export default function RecipeDetail({ recipe }: { recipe: Recipe }) {
         <div className="absolute bottom-0 left-0 right-0 p-6 sm:p-10 max-w-4xl">
           {(recipe.category || recipe.area) && (
             <p className="text-xs uppercase tracking-widest text-white/70 mb-3 font-medium">
-              {[recipe.category, recipe.area].filter(Boolean).join(" · ")}
+              {[formatCategory(recipe.category), formatArea(recipe.area)].filter(Boolean).join(" · ")}
             </p>
           )}
           <h1
