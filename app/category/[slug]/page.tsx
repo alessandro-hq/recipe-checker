@@ -12,15 +12,13 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const name = slug.charAt(0).toUpperCase() + slug.slice(1);
-  return { title: `${name} Recipes | Recipe Checker` };
+  return { title: `${slug} Recipes | Recipe Checker` };
 }
 
 async function getData(slug: string) {
-  const category = slug.charAt(0).toUpperCase() + slug.slice(1);
   const supabase = await createSupabaseServerClient();
   const [recipesRes, catsRes, areasRes] = await Promise.all([
-    supabase.from("recipes").select("id, name, thumbnail, category, area, prep_time_minutes").eq("category", category).order("name"),
+    supabase.from("recipes").select("id, name, thumbnail, category, area, prep_time_minutes").eq("category", slug).order("name"),
     supabase.from("categories").select("slug, name, thumbnail, description").order("name"),
     supabase.from("areas").select("slug, name").order("name"),
   ]);
@@ -34,9 +32,10 @@ async function getData(slug: string) {
 export default async function CategoryPage({ params }: Props) {
   const { slug } = await params;
   const { recipes, categories, areas } = await getData(slug);
-  if (categories.length > 0 && !categories.find((c) => c.slug === slug)) notFound();
+  const categoryObj = categories.find((c) => c.slug === slug);
+  if (categories.length > 0 && !categoryObj) notFound();
 
-  const categoryName = slug.charAt(0).toUpperCase() + slug.slice(1);
+  const categoryName = categoryObj?.name ?? slug;
 
   return (
     <PageWrapper className="py-12">
