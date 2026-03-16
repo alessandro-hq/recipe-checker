@@ -6,7 +6,7 @@ Full-stack recipe discovery and ingredient-matching web app. Users can browse re
 
 Two data sources:
 - **TheMealDB free API** — main recipe database (seeded via `npm run seed`)
-- **Julia Child's "Mastering the Art of French Cooking Vol. 1"** — 551 French recipes extracted from PDF and seeded via `npm run seed-julia-child`
+- **Julia Child's "Mastering the Art of French Cooking Vol. 1"** — 582 French recipes extracted from the plain-text version of the book and seeded via `npm run seed-julia-child`
 
 ---
 
@@ -27,7 +27,7 @@ npm run dev                  # Start dev server
 npm run build                # Production build
 npm run seed                 # Seed database from TheMealDB
 npm run seed-julia-child     # Seed Julia Child recipes from extracted JSON
-npm run extract-julia-child  # Re-extract recipes from PDF → julia_child_recipes.json
+npm run extract-julia-child  # Re-extract recipes from txt → julia_child_recipes.json
 npm run update-prep-times    # Backfill prep time data
 ```
 
@@ -77,8 +77,8 @@ recipe-checker/
 │   │   └── PageWrapper.tsx
 │   ├── features/
 │   │   ├── IngredientMatcher.tsx    # Ingredient matching UI (client)
-│   │   ├── CategoryBrowser.tsx      # Filter chips
-│   │   └── RecipeDetail.tsx         # Recipe display
+│   │   ├── CategoryBrowser.tsx      # Filter chips (hidden on jc-* category pages)
+│   │   └── RecipeDetail.tsx         # Recipe display with JC-specific instruction parsing
 │   └── ui/
 │       ├── RecipeCard.tsx
 │       ├── RecipeGrid.tsx
@@ -96,8 +96,9 @@ recipe-checker/
 └── scripts/
     ├── seed.ts                      # Populate DB from TheMealDB
     ├── seed_julia_child.ts          # Populate DB from julia_child_recipes.json
-    ├── extract_julia_child.py       # Extract recipes from Julia Child PDF → JSON
-    ├── julia_child_recipes.json     # Extracted recipe data (gitignored)
+    ├── extract_julia_child_txt.py   # PRIMARY: Extract from .txt source → JSON (accurate)
+    ├── extract_julia_child.py       # FALLBACK: Extract from PDF (word-based, less accurate)
+    ├── julia_child_recipes.json     # Extracted recipe data (gitignored, regenerate locally)
     ├── update-prep-times.ts
     └── schema.sql                   # PostgreSQL DDL
 ```
@@ -117,8 +118,9 @@ Key RPC function: `match_recipes_by_ingredients(ingredient_ids)` — ranks recip
 ### Julia Child data conventions
 - Recipe IDs are prefixed `jc-` (e.g. `jc-onion-soup`)
 - Categories use slugs `jc-soups`, `jc-sauces`, `jc-eggs`, `jc-entrees`, `jc-fish`, `jc-poultry`, `jc-meat`, `jc-vegetables`, `jc-cold-buffet`, `jc-desserts`
-- Area is `french`
+- Area slug is `french` (lowercase)
 - Tags always include `["Julia Child", "French", "Mastering the Art of French Cooking", <chapter>]`
+- No thumbnail images — recipe detail page shows a gradient placeholder
 
 ---
 
@@ -145,12 +147,19 @@ Key RPC function: `match_recipes_by_ingredients(ingredient_ids)` — ranks recip
 - `IngredientMatcher`, `Navbar`, `FavouriteButton` are client components using hooks
 - API routes expose server-side logic to client fetches
 
-### Julia Child PDF Extraction (`scripts/extract_julia_child.py`)
-- Uses `pdfplumber` to extract text from the 1,150-page PDF
-- Anchors recipe detection on the `[English translation in brackets]` pattern unique to the book's formatting
-- Chapter tracking fires only on pages containing the word "CHAPTER" to avoid false matches
-- Recipes start from page 85 (Chapter I — Soups)
-- Outputs `scripts/julia_child_recipes.json` (gitignored, regenerate locally)
+### Julia Child Display Logic
+- **`components/features/RecipeDetail.tsx`** — `isJuliaChild` flag (`recipe.id.startsWith("jc-")`) enables JC-specific instruction parsing (`parseSteps()`): strips ingredient measurement lines, joins PDF line-wrapped sentences into paragraphs
+- **`components/ui/RecipeCard.tsx`** — `formatCategory()` converts `jc-desserts` → `Desserts (Julia Child)`, `formatArea()` capitalizes area slugs
+- **`app/category/[slug]/page.tsx`** — queries by raw slug (not capitalized), hides `CategoryBrowser` for `jc-*` slugs (all JC recipes are French, so cuisine filter wastes space)
+
+### Julia Child Extraction (`scripts/extract_julia_child_txt.py`)
+- Reads the plain-text (.txt) version of the book — quantities are on the same line as ingredient names, no PDF layout issues
+- Book source file: `/Users/alessandrofazio/Calibre Library/Julia Child/Mastering the Art of French Cooking, Volume 1 (2)/Mastering the Art of French Cooking, Volum - Julia Child.txt`
+- Anchors recipe detection on `[English translation in brackets]` lines — unique to Julia Child's book format
+- Chapter tracking via `CHAPTER ONE` / `CHAPTER TWO` / ... keywords (actual recipe content starts at line ~1474)
+- `parse_ingredients()` uses `UNIT_RE` (quantity + unit + name), `A_UNIT_RE` (A/An pinch of...), and `OPTIONAL_RE` patterns; skips equipment lines via `EQUIPMENT_RE`
+- Outputs `scripts/julia_child_recipes.json` (gitignored — regenerate locally with `npm run extract-julia-child`)
+- Last extraction: 582 recipes, 2578 total ingredients (avg 4.4 per recipe)
 
 ---
 
@@ -173,8 +182,22 @@ Prep time badges: green (quick ≤15 min), yellow (medium 15–60 min), red (lon
 
 ## Deployment
 
-- **GitHub** → version control, auto-triggers Vercel deploys on push to `main`
-- **Vercel** → hosting (`NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY` set in project env vars)
+- **GitHub** → `https://github.com/alessandro-hq/recipe-checker` — auto-triggers Vercel deploys on push to `main`
+- **Vercel** → `https://recipe-checker-henna.vercel.app` (`NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY` set in project env vars)
 - **Supabase** — project: "Recipe tracker", region: eu-west-1
 - Images served from `www.themealdb.com/images/**` (configured in `next.config.ts`)
 - `SUPABASE_SERVICE_ROLE_KEY` must NOT be added to Vercel — only needed locally for seeding
+
+---
+
+## Bugs Fixed (session history)
+
+| Bug | Fix |
+|-----|-----|
+| Julia Child recipes show broken image | Gradient placeholder in `RecipeCard` and `RecipeDetail` when `thumbnail` is null |
+| Raw slug in card subtitle (`jc-desserts · french`) | `formatCategory()` / `formatArea()` helpers in `RecipeCard` and `RecipeDetail` |
+| Category page shows 0 recipes for JC categories | Was uppercasing slug before query; fixed to use raw slug in `.eq("category", slug)` |
+| CategoryBrowser shown on JC category pages | Hidden via `isJuliaChild` flag — wastes space, all JC recipes are French |
+| PDF line-wraps became numbered steps | `parseSteps()` joins continuation lines into paragraphs for JC recipes |
+| Ingredient measurement lines appeared in instructions | `INGREDIENT_LINE_RE` filter in `parseSteps()` strips them |
+| Missing ingredient quantities (e.g. "cup sugar" instead of "1 cup sugar") | Switched extraction from PDF to .txt source — quantities always on same line in .txt |
