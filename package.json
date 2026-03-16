@@ -8,7 +8,7 @@
     "start": "next start",
     "seed": "tsx scripts/seed.ts",
     "seed-julia-child": "tsx scripts/seed_julia_child.ts",
-    "extract-julia-child": "python3 scripts/extract_julia_child.py",
+    "extract-julia-child": "python3 scripts/extract_julia_child_txt.py",
     "update-prep-times": "tsx scripts/update-prep-times.ts"
   },
   "dependencies": {

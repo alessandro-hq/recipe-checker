@@ -49,6 +49,39 @@ CHAPTER_PATTERNS = [
 TRANSLATION_RE = re.compile(r"^\[([^\]]+)\]\s*$")
 
 
+def page_text_from_words(page) -> str:
+    """
+    Reconstruct page text using word-level positional extraction.
+
+    pdfplumber's extract_text() loses words that sit at extreme left-margin
+    x-positions (the ingredient quantity column in Julia Child's two-column
+    layout).  extract_words() captures every word; we group by y-coordinate
+    and sort by x so that a quantity like "1" at x≈62 ends up before
+    "cup granulated sugar" at x≈75 on the same reconstructed line.
+    """
+    words = page.extract_words(x_tolerance=3, y_tolerance=5, keep_blank_chars=False)
+    if not words:
+        return ""
+
+    # Sort all words by (top, x0) so rows are in reading order
+    words.sort(key=lambda w: (w["top"], w["x0"]))
+
+    rows: list[list] = []
+    Y_TOL = 5
+    for w in words:
+        if rows and abs(w["top"] - rows[-1][0]["top"]) <= Y_TOL:
+            rows[-1].append(w)
+        else:
+            rows.append([w])
+
+    lines = []
+    for row in rows:
+        row.sort(key=lambda w: w["x0"])
+        lines.append(" ".join(w["text"] for w in row))
+
+    return "\n".join(lines)
+
+
 def slugify(text: str) -> str:
     text = text.lower()
     for src, dst in [
@@ -82,6 +115,14 @@ def parse_ingredients(text: str) -> list[dict]:
         r"(.+)$",
         re.IGNORECASE
     )
+    # Unit-first lines: "cup granulated sugar", "Tb water" (quantity omitted = 1)
+    UNIT_FIRST_RE = re.compile(
+        r"^(Tb|Tbs|tbsp?|tsp|cups?|lb\.?|oz\.?|qt|pt|quarts?|pints?|pounds?|ounces?|"
+        r"cloves?|heads?|sprigs?|pinch|slices?|inch(es)?|packages?|cans?|bunches?|handfuls?|"
+        r"pieces?|strips?|sheets?|squares?|envelopes?|jars?|bottles?|drops?)\.?\s+"
+        r"(.+)$",
+        re.IGNORECASE
+    )
     # Also catch "A pinch of …", "A few …", etc.
     A_UNIT_RE = re.compile(
         r"^(A|An)\s+(pinch|handful|few|bunch|sprig|slice|piece|strip|round|clove|head)s?\s+(?:of\s+)?(.+)$",
@@ -103,7 +144,15 @@ def parse_ingredients(text: str) -> list[dict]:
                 qty, unit, name = m2.group(1), m2.group(2), m2.group(3).strip()
                 measure = f"{qty} {unit}"
             else:
-                continue
+                m3 = UNIT_FIRST_RE.match(line)
+                if m3:
+                    unit, name = m3.group(1).strip(), m3.group(3).strip()
+                    # Skip if name looks like an instruction fragment
+                    if re.match(r"^(of |or |and |then |about |to |until |with )", name, re.IGNORECASE):
+                        continue
+                    measure = unit
+                else:
+                    continue
 
         # Clean trailing notes from ingredient name
         name = re.sub(
@@ -144,7 +193,7 @@ def main():
         for i, page in enumerate(pdf.pages):
             if i % 200 == 0:
                 print(f"  {i+1}/{total}…")
-            text = page.extract_text() or ""
+            text = page_text_from_words(page)
             upper = text.upper()
             # Only redetect chapter on pages that contain the word CHAPTER
             if "CHAPTER" in upper:
